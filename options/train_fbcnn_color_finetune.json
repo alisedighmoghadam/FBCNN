@@ -1,28 +1,67 @@
 {
-  "task": "FBCNN-Color-finetune"
-  , "gpu_ids": [0]                                
-  , "n_channels": 3
+  "task": "FBCNN-Color-finetune"  //  root/task/images-models-options
+  , "model": "fbcnn"
+  , "gpu_ids": [0]
+  , "n_channels": 3  // broadcast to "datasets", 1 for grayscale, 3 for color
+  , "merge_bn": false               // BN for DnCNN
+  , "merge_bn_startpoint": 40000000  // merge BN after N iterations
+  , "path": {
+    "root": "deblocking"
+    , "pretrained_netG": null      // ignored: training starts from the newest models/<step>_G.pth
+  }
+
   , "datasets": {
     "train": {
-      "dataset_type": "jpeg"
-      , "dataroot_H": "../../data/coco/coco_minitrain_10k/images/train2017"
-      , "H_size": 96
-      , "dataloader_num_workers": 8
-      , "dataloader_batch_size": 32               
+      "name": "train_dataset"           // just name
+      , "dataset_type": "jpeg"         // "jpeg" | "jpeggray" | "jpeggraydouble"
+      , "dataroot_H": "../../data/coco/coco_minitrain_10k/images/train2017"  // path of original training dataset
+      , "dataroot_L": null            // path of L training dataset
+      , "H_size": 96                  // patch size 40 | 64 | 96 | 128 | 192
+      , "dataloader_shuffle": true
+      , "dataloader_num_workers": 8   // set to os.cpu_count() on the training machine
+      , "dataloader_batch_size": 32     // batch size 1 | 16 | 32 | 48 | 64 | 128
     }, "test": {
-      "dataset_type": "jpeg"
-      , "dataroot_H": "../../data/coco/coco_minitrain_10k/images/val2017" 
+      "name": "test_dataset"            // just name
+      , "dataset_type": "jpeg"         // "jpeg" | "jpeggray" | "jpeggraydouble"
+      , "dataroot_H": "../../data/coco/val_small"  // first 50 images of val2017; all 5,000 take ~1 h per test
+      , "dataroot_L": null              // unused: test images are compressed at QF=10 on the fly
     }
   }
+
   , "netG": {
-    "act_mode": "R"                               
-    
+    "net_type": "fbcnn"
+    , "in_nc": 3        // input channel number
+    , "out_nc": 3 // output channel number
+    , "nc": [64, 128, 256, 512] // number of channels
+    , "nb": 4
+    , "act_mode": "R"  // must be "R" to match the released fbcnn_color.pth (no BatchNorm)
+    , "upsample_mode": "convtranspose"  // "pixelshuffle" | "convtranspose" | "upconv"
+    , "downsample_mode": "strideconv"   // "strideconv" | "avgpool" | "maxpool"
+
+    , "init_type": "orthogonal"         // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
+    , "init_bn_type": "uniform"         // "uniform" | "constant"
+    , "init_gain": 0.2
   }
+
   , "train": {
-    "G_optimizer_lr": 1e-5                         
+    "G_lossfn_type": "l1"               // "l1" preferred | "l2sum" | "l2" | "ssim"
+    , "G_lossfn_weight": 1.0            // default
+    , "QF_lossfn_type": "l1"
+    , "QF_lossfn_weight": 0.001
+
+    , "G_optimizer_type": "adam"        // fixed, adam is enough
+    , "G_optimizer_lr": 1e-5         // learning rate
+    , "G_optimizer_clipgrad": null      // unused
+
+    , "G_scheduler_type": "MultiStepLR" // "MultiStepLR" is enough
     , "G_scheduler_milestones": [20000, 40000, 60000]
-    , "checkpoint_test": 1000
-    , "checkpoint_save": 1000
+    , "G_scheduler_gamma": 0.5
+
+    , "G_regularizer_orthstep": null    // unused
+    , "G_regularizer_clipstep": null    // unused
+
+    , "checkpoint_test": 5000           // every ~10 min on an A100
+    , "checkpoint_save": 5000           // each checkpoint is ~288 MB
     , "checkpoint_print": 100
   }
 }
